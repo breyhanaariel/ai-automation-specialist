@@ -5,7 +5,7 @@ from time import perf_counter
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.config import Settings, get_settings
 from app.persistence import WorkflowRepository
@@ -226,6 +226,15 @@ async def process_ticket(
         "status": state.status,
         "latency_ms": latency_ms,
     }
+
+
+@router.get("/workflows")
+async def list_workflows(
+    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    workflow_status: Annotated[str | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[WorkflowState]:
+    return repository.list_workflows(status=workflow_status, limit=limit)
 
 
 @router.post("/workflows/{workflow_id}/review")

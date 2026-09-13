@@ -62,12 +62,40 @@ class WorkflowRepository:
                 """
             )
             connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS idempotency_keys (
+                    ticket_id TEXT PRIMARY KEY,
+                    workflow_id TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_audit_workflow ON audit_events(workflow_id)"
             )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_workflows_status_updated "
                 "ON workflows(status, updated_at DESC)"
             )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflows_ticket ON workflows(ticket_id)"
+            )
+
+    def claim_ticket(self, ticket_id: str, workflow_id: str) -> str | None:
+        now = datetime.now(UTC).isoformat()
+        with self._connection() as connection:
+            try:
+                connection.execute(
+                    "INSERT INTO idempotency_keys(ticket_id, workflow_id, created_at) VALUES (?, ?, ?)",
+                    (ticket_id, workflow_id, now),
+                )
+                return None
+            except sqlite3.IntegrityError:
+                row = connection.execute(
+                    "SELECT workflow_id FROM idempotency_keys WHERE ticket_id = ?",
+                    (ticket_id,),
+                ).fetchone()
+        return None if row is None else str(row["workflow_id"])
 
     def save_workflow(self, state: WorkflowState) -> None:
         now = datetime.now(UTC).isoformat()
@@ -98,6 +126,21 @@ class WorkflowRepository:
             row = connection.execute(
                 "SELECT state_json FROM workflows WHERE workflow_id = ?",
                 (workflow_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return WorkflowState.model_validate_json(row["state_json"])
+
+    def get_workflow_by_ticket(self, ticket_id: str) -> WorkflowState | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT state_json FROM workflows
+                WHERE ticket_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (ticket_id,),
             ).fetchone()
         if row is None:
             return None
@@ -164,24 +207,45 @@ class WorkflowRepository:
             failed = connection.execute(
                 "SELECT COUNT(*) FROM workflows WHERE status = 'failed'"
             ).fetchone()[0]
-            rows = connection.execute(
-                "SELECT event_json FROM audit_events WHERE event_type = 'workflow_completed'"
-            ).fetchall()
+            replay_count = connection.execute(
+                "SELECT COUNT(*) FROM audit_events WHERE event_type = 'idempotent_replay'"
+            ).fetchone()[0]
+            rows = connection.execute("SELECT state_json FROM workflows").fetchall()
 
-        latencies = []
+        completed_latencies: list[int] = []
+        classification_latencies: list[int] = []
+        retrieval_latencies: list[int] = []
+        drafting_latencies: list[int] = []
+        retries = 0
         for row in rows:
-            payload = json.loads(row["event_json"])
-            latency = payload.get("latency_ms")
-            if isinstance(latency, int):
-                latencies.append(latency)
+            state = WorkflowState.model_validate_json(row["state_json"])
+            retries += state.retry_count
+            timings = state.stage_latencies_ms
+            if state.status == "completed" and "total" in timings:
+                completed_latencies.append(timings["total"])
+            if "classification" in timings:
+                classification_latencies.append(timings["classification"])
+            if "retrieval" in timings:
+                retrieval_latencies.append(timings["retrieval"])
+            if "drafting" in timings:
+                drafting_latencies.append(timings["drafting"])
 
-        average_latency_ms = round(sum(latencies) / len(latencies), 2) if latencies else 0.0
+        def average(values: list[int]) -> float:
+            return round(sum(values) / len(values), 2) if values else 0.0
+
         automation_rate = round((completed / total) * 100, 2) if total else 0.0
+        failure_rate = round((failed / total) * 100, 2) if total else 0.0
         return {
             "total_workflows": total,
             "completed": completed,
             "awaiting_review": awaiting_review,
             "failed": failed,
+            "failure_rate_percent": failure_rate,
             "automation_rate_percent": automation_rate,
-            "average_completed_latency_ms": average_latency_ms,
+            "idempotent_replays": replay_count,
+            "provider_retries": retries,
+            "average_completed_latency_ms": average(completed_latencies),
+            "average_classification_latency_ms": average(classification_latencies),
+            "average_retrieval_latency_ms": average(retrieval_latencies),
+            "average_drafting_latency_ms": average(drafting_latencies),
         }

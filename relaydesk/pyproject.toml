@@ -27,13 +27,13 @@ where = ["backend"]
 include = ["app*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["backend"]
+pythonpath = ["backend", "."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-src = ["backend", "tests"]
+src = ["backend", "evals", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

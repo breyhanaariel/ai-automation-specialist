@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Annotated
+from typing import Annotated, Awaitable, Callable, TypeVar
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from app.config import Settings, get_settings
 from app.persistence import WorkflowRepository
-from app.providers.base import ProviderError
+from app.providers.base import (
+    ProviderError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from app.providers.factory import build_provider
 from app.schemas import (
     AuditEvent,
@@ -27,6 +31,7 @@ from app.services.retrieval import KnowledgeRetriever
 from app.services.routing import decide_route
 
 router = APIRouter(prefix="/api/v1", tags=["classification"])
+R = TypeVar("R")
 
 
 def get_repository(settings: Annotated[Settings, Depends(get_settings)]) -> WorkflowRepository:
@@ -54,6 +59,43 @@ def audit_event(
         latency_ms=latency_ms,
         details=details or {},
     )
+
+
+async def with_retry(
+    operation: Callable[[], Awaitable[R]],
+    *,
+    max_retries: int,
+    on_retry: Callable[[ProviderError, int], None],
+) -> R:
+    attempt = 0
+    while True:
+        try:
+            return await operation()
+        except (ProviderTimeoutError, ProviderUnavailableError) as exc:
+            if attempt >= max_retries:
+                raise
+            attempt += 1
+            on_retry(exc, attempt)
+
+
+def workflow_response(state: WorkflowState, *, idempotent_replay: bool = False) -> dict[str, object]:
+    return {
+        "workflow_id": state.workflow_id,
+        "ticket_id": state.ticket.ticket_id,
+        "correlation_id": state.correlation_id or state.workflow_id,
+        "provider": state.provider,
+        "model": state.model,
+        "classification": state.classification,
+        "sources": state.retrieved_sources,
+        "draft": state.draft,
+        "routing": state.routing,
+        "status": state.status,
+        "stage_latencies_ms": state.stage_latencies_ms,
+        "latency_ms": state.stage_latencies_ms.get("total", 0),
+        "retry_count": state.retry_count,
+        "error_code": state.error_code,
+        "idempotent_replay": idempotent_replay,
+    }
 
 
 @router.post("/classify")
@@ -87,15 +129,42 @@ async def process_ticket(
     ticket: SupportTicketIn,
     settings: Annotated[Settings, Depends(get_settings)],
     repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    correlation_id: Annotated[str | None, Header(alias="X-Correlation-ID")] = None,
 ) -> dict[str, object]:
+    workflow_id = str(uuid4())
+    claimed_by = repository.claim_ticket(ticket.ticket_id, workflow_id)
+    if claimed_by is not None:
+        existing = repository.get_workflow(claimed_by) or repository.get_workflow_by_ticket(
+            ticket.ticket_id
+        )
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "IdempotencyConflict", "message": "Ticket is already being processed"},
+            )
+        repository.add_audit_event(
+            audit_event(
+                workflow_id=existing.workflow_id,
+                ticket_id=ticket.ticket_id,
+                event_type="idempotent_replay",
+                details={"correlation_id": correlation_id or ""},
+            )
+        )
+        return workflow_response(existing, idempotent_replay=True)
+
     provider = build_provider(settings)
     classifier = ClassificationService(provider)
     retriever = KnowledgeRetriever()
     drafter = DraftingService(provider)
-    workflow_id = str(uuid4())
     started = perf_counter()
-
-    state = WorkflowState(workflow_id=workflow_id, ticket=ticket)
+    resolved_correlation_id = correlation_id or workflow_id
+    state = WorkflowState(
+        workflow_id=workflow_id,
+        ticket=ticket,
+        correlation_id=resolved_correlation_id,
+        provider=provider.name,
+        model=provider.model,
+    )
     repository.save_workflow(state)
     repository.add_audit_event(
         audit_event(
@@ -104,11 +173,36 @@ async def process_ticket(
             event_type="workflow_received",
             provider=provider.name,
             model=provider.model,
+            details={"correlation_id": resolved_correlation_id},
         )
     )
 
+    def record_retry(exc: ProviderError, attempt: int) -> None:
+        state.retry_count += 1
+        repository.save_workflow(state)
+        repository.add_audit_event(
+            audit_event(
+                workflow_id=workflow_id,
+                ticket_id=ticket.ticket_id,
+                event_type="provider_retry",
+                provider=provider.name,
+                model=provider.model,
+                details={
+                    "attempt": attempt,
+                    "error_code": exc.__class__.__name__,
+                    "correlation_id": resolved_correlation_id,
+                },
+            )
+        )
+
     try:
-        classification = await classifier.classify(ticket)
+        stage_started = perf_counter()
+        classification = await with_retry(
+            lambda: classifier.classify(ticket),
+            max_retries=settings.llm_max_retries,
+            on_retry=record_retry,
+        )
+        state.stage_latencies_ms["classification"] = int((perf_counter() - stage_started) * 1000)
         state.classification = classification
         state.status = "classified"
         repository.save_workflow(state)
@@ -119,14 +213,14 @@ async def process_ticket(
                 event_type="ticket_classified",
                 provider=provider.name,
                 model=provider.model,
-                details={
-                    "category": classification.category.value,
-                    "confidence": classification.confidence,
-                },
+                latency_ms=state.stage_latencies_ms["classification"],
+                details={"category": classification.category.value, "confidence": classification.confidence},
             )
         )
 
+        stage_started = perf_counter()
         sources = retriever.retrieve(ticket, classification)
+        state.stage_latencies_ms["retrieval"] = int((perf_counter() - stage_started) * 1000)
         state.retrieved_sources = sources
         state.status = "retrieved"
         repository.save_workflow(state)
@@ -135,11 +229,18 @@ async def process_ticket(
                 workflow_id=workflow_id,
                 ticket_id=ticket.ticket_id,
                 event_type="knowledge_retrieved",
+                latency_ms=state.stage_latencies_ms["retrieval"],
                 details={"source_ids": [source.source_id for source in sources]},
             )
         )
 
-        draft = await drafter.draft(ticket, classification, sources)
+        stage_started = perf_counter()
+        draft = await with_retry(
+            lambda: drafter.draft(ticket, classification, sources),
+            max_retries=settings.llm_max_retries,
+            on_retry=record_retry,
+        )
+        state.stage_latencies_ms["drafting"] = int((perf_counter() - stage_started) * 1000)
         state.draft = draft
         state.status = "drafted"
         repository.save_workflow(state)
@@ -150,11 +251,15 @@ async def process_ticket(
                 event_type="response_drafted",
                 provider=provider.name,
                 model=provider.model,
+                latency_ms=state.stage_latencies_ms["drafting"],
                 details={"source_ids": draft.source_ids},
             )
         )
     except ProviderError as exc:
         state.status = "failed"
+        state.error_code = exc.__class__.__name__
+        state.error_message = str(exc)
+        state.stage_latencies_ms["total"] = int((perf_counter() - started) * 1000)
         repository.save_workflow(state)
         repository.add_audit_event(
             audit_event(
@@ -163,27 +268,37 @@ async def process_ticket(
                 event_type="workflow_failed",
                 provider=provider.name,
                 model=provider.model,
-                details={"error_type": exc.__class__.__name__, "message": str(exc)},
+                latency_ms=state.stage_latencies_ms["total"],
+                details={
+                    "error_code": state.error_code,
+                    "message": state.error_message,
+                    "retry_count": state.retry_count,
+                    "correlation_id": resolved_correlation_id,
+                },
             )
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": exc.__class__.__name__, "message": str(exc)},
+            detail={"code": state.error_code, "message": state.error_message, "workflow_id": workflow_id},
         ) from exc
     except ValueError as exc:
         state.status = "failed"
+        state.error_code = "GroundingValidationError"
+        state.error_message = str(exc)
+        state.stage_latencies_ms["total"] = int((perf_counter() - started) * 1000)
         repository.save_workflow(state)
         repository.add_audit_event(
             audit_event(
                 workflow_id=workflow_id,
                 ticket_id=ticket.ticket_id,
                 event_type="workflow_failed",
-                details={"error_type": "GroundingValidationError", "message": str(exc)},
+                latency_ms=state.stage_latencies_ms["total"],
+                details={"error_code": state.error_code, "message": state.error_message},
             )
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "GroundingValidationError", "message": str(exc)},
+            detail={"code": state.error_code, "message": state.error_message, "workflow_id": workflow_id},
         ) from exc
 
     routing = decide_route(classification, settings)
@@ -196,12 +311,9 @@ async def process_ticket(
         )
 
     state.routing = routing
-    state.status = (
-        "completed" if routing.route == RecommendedRoute.AUTO_ELIGIBLE else "awaiting_review"
-    )
+    state.status = "completed" if routing.route == RecommendedRoute.AUTO_ELIGIBLE else "awaiting_review"
+    state.stage_latencies_ms["total"] = int((perf_counter() - started) * 1000)
     repository.save_workflow(state)
-
-    latency_ms = int((perf_counter() - started) * 1000)
     repository.add_audit_event(
         audit_event(
             workflow_id=workflow_id,
@@ -209,23 +321,16 @@ async def process_ticket(
             event_type="workflow_completed",
             provider=provider.name,
             model=provider.model,
-            latency_ms=latency_ms,
-            details={"route": routing.route.value, "status": state.status},
+            latency_ms=state.stage_latencies_ms["total"],
+            details={
+                "route": routing.route.value,
+                "status": state.status,
+                "retry_count": state.retry_count,
+                "correlation_id": resolved_correlation_id,
+            },
         )
     )
-
-    return {
-        "workflow_id": workflow_id,
-        "ticket_id": ticket.ticket_id,
-        "provider": provider.name,
-        "model": provider.model,
-        "classification": classification,
-        "sources": sources,
-        "draft": draft,
-        "routing": routing,
-        "status": state.status,
-        "latency_ms": latency_ms,
-    }
+    return workflow_response(state)
 
 
 @router.get("/workflows")
@@ -247,24 +352,14 @@ async def review_workflow(
     if state is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     if state.status != "awaiting_review":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Workflow is not awaiting review; current status is {state.status}",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Workflow is not awaiting review; current status is {state.status}")
     if decision.ticket_id != state.ticket.ticket_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Review ticket_id does not match workflow ticket_id",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Review ticket_id does not match workflow ticket_id")
     if decision.action == ReviewAction.EDIT_AND_APPROVE and not decision.edited_response:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="edited_response is required for edit_and_approve",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="edited_response is required for edit_and_approve")
 
     if decision.action == ReviewAction.EDIT_AND_APPROVE and state.draft is not None:
         state.draft.draft_text = decision.edited_response or state.draft.draft_text
-
     if decision.action in {ReviewAction.APPROVE, ReviewAction.EDIT_AND_APPROVE}:
         state.status = "completed"
     elif decision.action == ReviewAction.REJECT:
@@ -285,24 +380,15 @@ async def review_workflow(
                 "notes": decision.notes or "",
                 "edited": decision.action == ReviewAction.EDIT_AND_APPROVE,
                 "resulting_status": state.status,
+                "correlation_id": state.correlation_id or "",
             },
         )
     )
-
-    return {
-        "workflow_id": workflow_id,
-        "ticket_id": state.ticket.ticket_id,
-        "action": decision.action,
-        "status": state.status,
-        "draft": state.draft,
-    }
+    return {"workflow_id": workflow_id, "ticket_id": state.ticket.ticket_id, "action": decision.action, "status": state.status, "draft": state.draft}
 
 
 @router.get("/workflows/{workflow_id}")
-async def get_workflow(
-    workflow_id: str,
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
-) -> WorkflowState:
+async def get_workflow(workflow_id: str, repository: Annotated[WorkflowRepository, Depends(get_repository)]) -> WorkflowState:
     state = repository.get_workflow(workflow_id)
     if state is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
@@ -310,17 +396,12 @@ async def get_workflow(
 
 
 @router.get("/workflows/{workflow_id}/audit")
-async def get_workflow_audit(
-    workflow_id: str,
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
-) -> list[AuditEvent]:
+async def get_workflow_audit(workflow_id: str, repository: Annotated[WorkflowRepository, Depends(get_repository)]) -> list[AuditEvent]:
     if repository.get_workflow(workflow_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     return repository.list_audit_events(workflow_id)
 
 
 @router.get("/metrics")
-async def get_metrics(
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
-) -> dict[str, int | float]:
+async def get_metrics(repository: Annotated[WorkflowRepository, Depends(get_repository)]) -> dict[str, int | float]:
     return repository.metrics()

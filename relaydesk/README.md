@@ -2,7 +2,7 @@
 
 **AI Customer Support Triage & Resolution System**
 
-Status: **Project 01 — Foundation complete, backend implementation next**
+Status: **Project 01 — Classification + routing backend implemented**
 
 RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts responses, routes by confidence/risk, and sends uncertain cases to a real human review experience.
 
@@ -45,24 +45,27 @@ Auto Route       Human Review
       Audit + Metrics
 ```
 
-## What Is Implemented Now
+## Implemented Backend Core
 
-The project foundation now includes:
+RelayDesk now includes:
 
 - explicit product and automation requirements
-- backend architecture boundaries
 - 32 labeled synthetic benchmark tickets
 - Pydantic domain schemas
-- vendor-neutral LLM provider interface
-- normalized provider failure types
+- vendor-neutral `LLMProvider` interface
+- real Ollama `/api/chat` structured-output adapter
+- provider factory
+- classification prompt + classification service
+- deterministic confidence/risk routing policy
+- FastAPI `/api/v1/classify` endpoint
+- FastAPI `/health` endpoint
+- normalized provider failure handling
+- tests for classification contracts, routing, validation, policy override, and provider outage behavior
+- GitHub Actions CI with Ruff + pytest
 - zero-cost Ollama-first configuration
-- optional cloud-provider configuration contract
-- deterministic confidence-routing thresholds
 - benchmark/evaluation plan and quality targets
-- Python project/dependency configuration
-- environment-variable template
 
-## Current Repository Structure
+## Repository Structure
 
 ```text
 relaydesk/
@@ -71,13 +74,22 @@ relaydesk/
 ├── pyproject.toml
 ├── backend/
 │   └── app/
-│       ├── __init__.py
+│       ├── api.py
 │       ├── config.py
+│       ├── main.py
+│       ├── prompts.py
 │       ├── schemas.py
-│       └── providers/
-│           ├── __init__.py
-│           ├── base.py
-│           └── README.md
+│       ├── providers/
+│       │   ├── base.py
+│       │   ├── factory.py
+│       │   └── ollama.py
+│       └── services/
+│           ├── classification.py
+│           └── routing.py
+├── tests/
+│   ├── test_api.py
+│   ├── test_classification_service.py
+│   └── test_routing.py
 ├── data/
 │   └── support_tickets.jsonl
 └── docs/
@@ -90,46 +102,77 @@ relaydesk/
 
 The model may recommend a route, but deterministic application logic owns the final route.
 
-Initial policy:
-
 ```text
-risk flag present        → human review
+high-risk flag present   → human review
 confidence >= 0.90       → auto eligible
 confidence 0.70–0.89     → human verification
 confidence < 0.70        → manual processing
 ```
 
-Thresholds are configurable and are not buried inside model prompts.
+This means even a 0.99-confidence model response cannot auto-process a ticket carrying an account-security, payment-dispute, legal, privacy, chargeback, data-loss, or safety risk flag.
+
+## Run Locally
+
+From `relaydesk/`:
+
+```bash
+python -m venv .venv
+```
+
+Activate the environment, then install:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Copy the environment template:
+
+```bash
+cp .env.example .env
+```
+
+Make sure Ollama is running and the configured model is installed, then start the API:
+
+```bash
+uvicorn app.main:app --app-dir backend --reload
+```
+
+Open the generated API docs at `http://127.0.0.1:8000/docs`.
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/classify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticket_id":"demo-001",
+    "customer_message":"Someone changed my password and I cannot log in.",
+    "received_at":"2026-09-13T02:00:00Z",
+    "source":"email"
+  }'
+```
+
+The response contains both the model classification and RelayDesk's deterministic routing decision.
 
 ## Provider Strategy
 
-RelayDesk is designed so business logic does not depend directly on one AI vendor.
-
-Planned runtime options:
+Current implementation:
 
 - Ollama/local models — primary zero-cost path
-- OpenAI-compatible APIs — optional
-- Anthropic — optional
-- Gemini — optional
 
-The application talks to a common `LLMProvider` interface instead of importing provider SDK objects throughout the codebase.
+Provider contract reserved for later adapters:
+
+- OpenAI-compatible APIs
+- Anthropic
+- Gemini
+
+Business logic never imports vendor SDK objects directly.
 
 ## Measurement Rules
 
 Portfolio metrics will never be presented as real production-client results unless they actually are. Simulated/test results will be labeled as benchmark results.
 
-Planned benchmark outputs include:
-
-- category accuracy
-- priority accuracy
-- risk recall
-- routing accuracy
-- automation rate
-- human override rate
-- schema success rate
-- processing latency
-- failed workflow rate
-- manual-step reduction
+Planned benchmark outputs include category accuracy, priority accuracy, risk recall, routing accuracy, automation rate, human override rate, schema success rate, processing latency, failed workflow rate, and manual-step reduction.
 
 Initial engineering targets include >=90% category accuracy, >=95% routing accuracy, >=95% risk recall, and zero incorrectly auto-processed high-risk benchmark tickets.
 
@@ -141,28 +184,21 @@ Initial engineering targets include >=90% category accuracy, >=95% routing accur
 - [x] Backend architecture
 - [x] Provider abstraction contract
 - [x] Evaluation plan
-- [ ] Provider factory + Ollama adapter
-- [ ] Classification service
-- [ ] Deterministic routing service
-- [ ] FastAPI endpoints
-- [ ] Tests for schemas, routing, and provider failures
+- [x] Provider factory + Ollama adapter
+- [x] Classification service
+- [x] Deterministic routing service
+- [x] First FastAPI endpoint
+- [x] Core automated tests
+- [x] Backend CI foundation
 - [ ] n8n workflow
 - [ ] Retrieval layer
 - [ ] Human-review dashboard
 - [ ] Evaluation harness
-- [ ] Failure handling and observability
+- [ ] Persistence + audit events
+- [ ] Expanded failure handling and observability
 - [ ] Deployment
 - [ ] Final case study + demo video
 
 ## Next Implementation Step
 
-Build the actual Python backend core:
-
-1. provider factory
-2. Ollama structured-output adapter
-3. classification service
-4. deterministic routing service
-5. first FastAPI endpoint
-6. automated tests
-
-No n8n or dashboard work starts until this core can classify and route benchmark tickets reliably.
+Build the retrieval + drafting layer so RelayDesk can move from **classify and route** to **classify → retrieve evidence → draft a grounded reply → route** before n8n orchestrates the complete workflow.

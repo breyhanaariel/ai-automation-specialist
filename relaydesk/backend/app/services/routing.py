@@ -1,8 +1,10 @@
-from __future__ import annotations
-
 from app.config import Settings
-from app.schemas import RecommendedRoute, RiskFlag, RoutingDecision, TicketClassification
-
+from app.schemas import (
+    RecommendedRoute,
+    RiskFlag,
+    RoutingDecision,
+    TicketClassification,
+)
 
 HIGH_RISK_FLAGS = {
     RiskFlag.ACCOUNT_SECURITY,
@@ -29,7 +31,8 @@ def decide_route(
         route = RecommendedRoute.AUTO_ELIGIBLE
         reason = (
             f"Confidence {classification.confidence:.2f} meets the automatic-processing "
-            f"threshold {settings.classification_auto_threshold:.2f} and no high-risk flag is present."
+            f"threshold {settings.classification_auto_threshold:.2f}; no high-risk flag "
+            "is present."
         )
     elif classification.confidence >= settings.classification_review_threshold:
         route = RecommendedRoute.HUMAN_VERIFY

@@ -2,9 +2,9 @@
 
 **AI Customer Support Triage & Resolution System**
 
-Status: **Project 01 — Classification + routing backend implemented**
+Status: **Project 01 — Backend orchestration + persistence implemented**
 
-RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts responses, routes by confidence/risk, and sends uncertain cases to a real human review experience.
+RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts grounded responses, routes by confidence/risk, persists the workflow, and sends uncertain cases through a durable human-review path.
 
 ## Business Problem
 
@@ -21,12 +21,14 @@ A manual support workflow often looks like:
 
 RelayDesk automates the repetitive portions while preserving human judgment for uncertain or higher-risk cases.
 
-## Target Architecture
+## Current Architecture
 
 ```text
 Incoming Request
       ↓
-Webhook / API
+n8n Intake Webhook
+      ↓
+FastAPI /process
       ↓
 Input Validation
       ↓
@@ -34,18 +36,22 @@ AI Classification → Structured Schema
       ↓
 Knowledge Retrieval
       ↓
-Draft Response
+Grounded Draft Response
       ↓
 Confidence + Risk Policy
    ↙              ↘
-Auto Route       Human Review
-   ↘              ↙
-      Final Action
-           ↓
-      Audit + Metrics
+Auto Complete     Persist Awaiting Review
+                      ↓
+                Human Dashboard
+                      ↓
+             n8n Review Continuation
+                      ↓
+           Approve / Edit / Reject / Escalate
+                      ↓
+                 Audit + Metrics
 ```
 
-## Implemented Backend Core
+## Implemented Core
 
 RelayDesk now includes:
 
@@ -55,15 +61,21 @@ RelayDesk now includes:
 - vendor-neutral `LLMProvider` interface
 - real Ollama `/api/chat` structured-output adapter
 - provider factory
-- classification prompt + classification service
+- classification prompt + service
 - deterministic confidence/risk routing policy
-- FastAPI `/api/v1/classify` endpoint
-- FastAPI `/health` endpoint
-- normalized provider failure handling
-- tests for classification contracts, routing, validation, policy override, and provider outage behavior
+- local knowledge base + lexical retrieval
+- grounded response drafting + citation validation
+- unsupported-action safety override
+- SQLite workflow-state persistence
+- ordered audit events
+- workflow metrics foundation
+- durable human-review decision endpoint
+- n8n support-intake workflow
+- n8n review-continuation workflow
+- retry behavior around backend HTTP calls
+- FastAPI workflow/audit/metrics endpoints
 - GitHub Actions CI with Ruff + pytest
 - zero-cost Ollama-first configuration
-- benchmark/evaluation plan and quality targets
 
 ## Repository Structure
 
@@ -77,25 +89,20 @@ relaydesk/
 │       ├── api.py
 │       ├── config.py
 │       ├── main.py
+│       ├── persistence.py
 │       ├── prompts.py
 │       ├── schemas.py
 │       ├── providers/
-│       │   ├── base.py
-│       │   ├── factory.py
-│       │   └── ollama.py
 │       └── services/
-│           ├── classification.py
-│           └── routing.py
-├── tests/
-│   ├── test_api.py
-│   ├── test_classification_service.py
-│   └── test_routing.py
 ├── data/
+│   ├── knowledge_base.json
 │   └── support_tickets.jsonl
-└── docs/
-    ├── architecture.md
-    ├── evaluation-plan.md
-    └── requirements.md
+├── docs/
+├── n8n/
+│   ├── README.md
+│   ├── relaydesk-intake.json
+│   └── relaydesk-review-continuation.json
+└── tests/
 ```
 
 ## Routing Policy
@@ -109,7 +116,22 @@ confidence 0.70–0.89     → human verification
 confidence < 0.70        → manual processing
 ```
 
-This means even a 0.99-confidence model response cannot auto-process a ticket carrying an account-security, payment-dispute, legal, privacy, chargeback, data-loss, or safety risk flag.
+A second gate checks the drafted reply. If the draft claims an unsupported external action, RelayDesk overrides the normal route and forces human review.
+
+## Durable Human Review
+
+RelayDesk deliberately separates review from the original n8n execution.
+
+A review-required ticket is saved as `awaiting_review`. The later dashboard will submit one of:
+
+- `approve`
+- `edit_and_approve`
+- `reject`
+- `escalate`
+
+The review-continuation workflow then calls the persisted workflow endpoint and transitions the same workflow to `completed`, `rejected`, or `escalated`.
+
+This avoids holding an n8n execution open for hours and makes the process restart-safe.
 
 ## Run Locally
 
@@ -139,20 +161,7 @@ uvicorn app.main:app --app-dir backend --reload
 
 Open the generated API docs at `http://127.0.0.1:8000/docs`.
 
-Example request:
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/classify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ticket_id":"demo-001",
-    "customer_message":"Someone changed my password and I cannot log in.",
-    "received_at":"2026-09-13T02:00:00Z",
-    "source":"email"
-  }'
-```
-
-The response contains both the model classification and RelayDesk's deterministic routing decision.
+For n8n setup and webhook contracts, see [`n8n/README.md`](n8n/README.md).
 
 ## Provider Strategy
 
@@ -187,18 +196,19 @@ Initial engineering targets include >=90% category accuracy, >=95% routing accur
 - [x] Provider factory + Ollama adapter
 - [x] Classification service
 - [x] Deterministic routing service
-- [x] First FastAPI endpoint
-- [x] Core automated tests
+- [x] Retrieval layer
+- [x] Grounded drafting layer
+- [x] Persistence + audit events
+- [x] Workflow metrics foundation
+- [x] n8n intake workflow
+- [x] n8n review continuation workflow
 - [x] Backend CI foundation
-- [ ] n8n workflow
-- [ ] Retrieval layer
 - [ ] Human-review dashboard
 - [ ] Evaluation harness
-- [ ] Persistence + audit events
 - [ ] Expanded failure handling and observability
 - [ ] Deployment
 - [ ] Final case study + demo video
 
 ## Next Implementation Step
 
-Build the retrieval + drafting layer so RelayDesk can move from **classify and route** to **classify → retrieve evidence → draft a grounded reply → route** before n8n orchestrates the complete workflow.
+Build the **human-review dashboard** that reads persisted `awaiting_review` workflows and lets a reviewer inspect the original message, classification, retrieved sources, draft, confidence, and route, then choose **Approve**, **Edit & Approve**, **Reject**, or **Escalate**.

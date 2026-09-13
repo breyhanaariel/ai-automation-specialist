@@ -95,7 +95,9 @@ class DemoProvider(LLMProvider):
             confidence=confidence,
             risk_flags=risk_flags or [RiskFlag.NONE],
             recommended_route=route,
-            rationale_summary="Deterministic public-demo rules; local Ollama provides real model inference.",
+            rationale_summary=(
+                "Deterministic public-demo rules; local Ollama provides real model inference."
+            ),
         )
 
     def _draft(self, prompt: str) -> DraftResponse:

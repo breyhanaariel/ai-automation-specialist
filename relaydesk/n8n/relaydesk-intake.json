@@ -1,0 +1,122 @@
+{
+  "name": "RelayDesk - Support Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "relaydesk/support/intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "relaydesk-intake-webhook",
+      "name": "Support Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-620, 0],
+      "webhookId": "relaydesk-support-intake"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RELAYDESK_API_URL + '/api/v1/process' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "relaydesk-process-ticket",
+      "name": "Process Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-360, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "relaydesk-auto-completed-condition",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "relaydesk-auto-or-review",
+      "name": "Auto Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-100, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { workflow_id: $json.workflow_id, ticket_id: $json.ticket_id, status: $json.status, route: $json.routing.route, draft: $json.draft, review_required: false } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "relaydesk-auto-response",
+      "name": "Return Automatic Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [180, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { workflow_id: $json.workflow_id, ticket_id: $json.ticket_id, status: $json.status, route: $json.routing.route, classification: $json.classification, sources: $json.sources, draft: $json.draft, review_required: true } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "relaydesk-review-response",
+      "name": "Return Review Required",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [180, 100]
+    }
+  ],
+  "connections": {
+    "Support Intake Webhook": {
+      "main": [[{"node": "Process Ticket", "type": "main", "index": 0}]]
+    },
+    "Process Ticket": {
+      "main": [[{"node": "Auto Completed?", "type": "main", "index": 0}]]
+    },
+    "Auto Completed?": {
+      "main": [
+        [{"node": "Return Automatic Result", "type": "main", "index": 0}],
+        [{"node": "Return Review Required", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "relaydesk-intake-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

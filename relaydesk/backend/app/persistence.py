@@ -64,6 +64,10 @@ class WorkflowRepository:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_audit_workflow ON audit_events(workflow_id)"
             )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflows_status_updated "
+                "ON workflows(status, updated_at DESC)"
+            )
 
     def save_workflow(self, state: WorkflowState) -> None:
         now = datetime.now(UTC).isoformat()
@@ -98,6 +102,25 @@ class WorkflowRepository:
         if row is None:
             return None
         return WorkflowState.model_validate_json(row["state_json"])
+
+    def list_workflows(self, status: str | None = None, limit: int = 100) -> list[WorkflowState]:
+        with self._connection() as connection:
+            if status is None:
+                rows = connection.execute(
+                    "SELECT state_json FROM workflows ORDER BY updated_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT state_json FROM workflows
+                    WHERE status = ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (status, limit),
+                ).fetchall()
+        return [WorkflowState.model_validate_json(row["state_json"]) for row in rows]
 
     def add_audit_event(self, event: AuditEvent) -> None:
         with self._connection() as connection:

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
     llm_model: str = "qwen2.5-coder:7b"
     llm_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    llm_max_retries: int = Field(default=1, ge=0, le=3)
 
     ollama_base_url: str = "http://localhost:11434"
     openai_api_key: str | None = None

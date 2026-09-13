@@ -156,5 +156,7 @@ class WorkflowState(BaseModel):
         "drafted",
         "awaiting_review",
         "completed",
+        "rejected",
+        "escalated",
         "failed",
     ] = "received"

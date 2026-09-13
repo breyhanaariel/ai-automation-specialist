@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "relaydesk"
 version = "0.1.0"
@@ -17,6 +21,10 @@ dev = [
   "pytest-asyncio>=1.1,<2.0",
   "ruff>=0.12,<1.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["backend"]

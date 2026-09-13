@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from app.providers.base import (
     LLMProvider,

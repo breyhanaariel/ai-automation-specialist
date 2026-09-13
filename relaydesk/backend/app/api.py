@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1", tags=["classification"])
 @router.post("/classify")
 async def classify_ticket(
     ticket: SupportTicketIn,
-    settings: Settings = Depends(get_settings),
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, TicketClassification | RoutingDecision | str]:
     provider = build_provider(settings)
     service = ClassificationService(provider)

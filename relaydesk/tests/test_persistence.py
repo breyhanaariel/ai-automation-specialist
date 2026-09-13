@@ -69,14 +69,24 @@ def test_metrics_report_reliability_and_stage_latency(tmp_path) -> None:
             workflow_id="workflow-1",
             ticket=ticket("persist-1"),
             status="completed",
-            stage_latencies_ms={"classification": 40, "retrieval": 10, "drafting": 60, "total": 120},
+            stage_latencies_ms={
+                "classification": 40,
+                "retrieval": 10,
+                "drafting": 60,
+                "total": 120,
+            },
             retry_count=1,
         ),
         WorkflowState(
             workflow_id="workflow-2",
             ticket=ticket("persist-2"),
             status="awaiting_review",
-            stage_latencies_ms={"classification": 20, "retrieval": 6, "drafting": 30, "total": 70},
+            stage_latencies_ms={
+                "classification": 20,
+                "retrieval": 6,
+                "drafting": 30,
+                "total": 70,
+            },
         ),
         WorkflowState(
             workflow_id="workflow-3",

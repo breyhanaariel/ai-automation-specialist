@@ -1,6 +1,4 @@
 from app.schemas import SupportTicketIn
-
-
 CLASSIFICATION_SYSTEM_PROMPT = """You are RelayDesk's support-triage classifier.
 Return only data that matches the provided schema.
 

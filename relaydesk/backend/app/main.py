@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import router
 from app.config import get_settings
@@ -12,6 +16,14 @@ app = FastAPI(
     description="Human-aware AI customer support triage and routing API.",
 )
 app.include_router(router)
+
+dashboard_directory = Path(__file__).resolve().parents[2] / "dashboard"
+app.mount("/review", StaticFiles(directory=dashboard_directory, html=True), name="review-dashboard")
+
+
+@app.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/review/")
 
 
 @app.get("/health", tags=["system"])

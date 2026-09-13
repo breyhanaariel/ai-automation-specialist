@@ -1,0 +1,72 @@
+{
+  "name": "RelayDesk - Review Continuation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "relaydesk/review/continue",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "relaydesk-review-webhook",
+      "name": "Review Decision Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-520, 0],
+      "webhookId": "relaydesk-review-continuation"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RELAYDESK_API_URL + '/api/v1/workflows/' + $json.body.workflow_id + '/review' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ ticket_id: $json.body.ticket_id, action: $json.body.action, reviewer_id: $json.body.reviewer_id, reviewed_at: $json.body.reviewed_at, edited_response: $json.body.edited_response ?? null, notes: $json.body.notes ?? null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "relaydesk-submit-review",
+      "name": "Submit Review Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-240, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { workflow_id: $json.workflow_id, ticket_id: $json.ticket_id, action: $json.action, status: $json.status, draft: $json.draft, resumed: true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "relaydesk-review-complete-response",
+      "name": "Return Continued Workflow",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [40, 0]
+    }
+  ],
+  "connections": {
+    "Review Decision Webhook": {
+      "main": [[{"node": "Submit Review Decision", "type": "main", "index": 0}]]
+    },
+    "Submit Review Decision": {
+      "main": [[{"node": "Return Continued Workflow", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "relaydesk-review-continuation-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

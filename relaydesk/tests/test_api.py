@@ -76,7 +76,7 @@ class UnsafeDraftProvider(FakeProvider):
 
         unsafe = DraftResponse(
             draft_text="Your account change has been completed.",
-            source_ids=["kb-product"],
+            source_ids=[],
             requires_account_action=True,
             unsupported_action_claimed=True,
         )

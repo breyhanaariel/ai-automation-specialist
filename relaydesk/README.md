@@ -2,7 +2,7 @@
 
 **AI Customer Support Triage & Resolution System**
 
-Status: **Project 01 — Backend orchestration + persistence implemented**
+Status: **Project 01 — Human-review system implemented**
 
 RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts grounded responses, routes by confidence/risk, persists the workflow, and sends uncertain cases through a durable human-review path.
 
@@ -42,11 +42,13 @@ Confidence + Risk Policy
    ↙              ↘
 Auto Complete     Persist Awaiting Review
                       ↓
-                Human Dashboard
+                Human Review Console
+                      ↓
+             Approve / Edit / Reject / Escalate
+                      ↓
+              Persist Review Decision
                       ↓
              n8n Review Continuation
-                      ↓
-           Approve / Edit / Reject / Escalate
                       ↓
                  Audit + Metrics
 ```
@@ -73,6 +75,11 @@ RelayDesk now includes:
 - n8n support-intake workflow
 - n8n review-continuation workflow
 - retry behavior around backend HTTP calls
+- review-queue API
+- polished human-review dashboard served by FastAPI
+- editable response review
+- Approve / Edit & Approve / Reject / Escalate controls
+- risk flags, confidence, routing rationale, retrieved evidence, and audit timeline in the review console
 - FastAPI workflow/audit/metrics endpoints
 - GitHub Actions CI with Ruff + pytest
 - zero-cost Ollama-first configuration
@@ -94,6 +101,10 @@ relaydesk/
 │       ├── schemas.py
 │       ├── providers/
 │       └── services/
+├── dashboard/
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
 ├── data/
 │   ├── knowledge_base.json
 │   └── support_tickets.jsonl
@@ -118,18 +129,42 @@ confidence < 0.70        → manual processing
 
 A second gate checks the drafted reply. If the draft claims an unsupported external action, RelayDesk overrides the normal route and forces human review.
 
-## Durable Human Review
+## Human Review Console
 
-RelayDesk deliberately separates review from the original n8n execution.
+The review dashboard is served by the same FastAPI application at:
 
-A review-required ticket is saved as `awaiting_review`. The later dashboard will submit one of:
+```text
+http://127.0.0.1:8000/review/
+```
+
+It reads persisted `awaiting_review` workflows and shows:
+
+- original customer request
+- category, priority, sentiment, confidence, and risk flags
+- model-recommended route versus final policy route
+- routing rationale
+- retrieved knowledge sources with relevance scores
+- grounded AI draft
+- account-action / unsupported-action indicators
+- complete audit timeline
+- reviewer identity and notes
+
+Available reviewer actions:
 
 - `approve`
 - `edit_and_approve`
 - `reject`
 - `escalate`
 
-The review-continuation workflow then calls the persisted workflow endpoint and transitions the same workflow to `completed`, `rejected`, or `escalated`.
+A review decision updates the same persisted workflow and appends an audit event. The review queue then refreshes automatically so resolved tickets leave the queue.
+
+## Durable Human Review
+
+RelayDesk deliberately separates review from the original n8n execution.
+
+A review-required ticket is saved as `awaiting_review`. The dashboard can be opened later and resume that exact workflow rather than starting a new one.
+
+The review-continuation workflow transitions the workflow to `completed`, `rejected`, or `escalated` after the human decision is recorded.
 
 This avoids holding an n8n execution open for hours and makes the process restart-safe.
 
@@ -159,7 +194,7 @@ Make sure Ollama is running and the configured model is installed, then start th
 uvicorn app.main:app --app-dir backend --reload
 ```
 
-Open the generated API docs at `http://127.0.0.1:8000/docs`.
+Open the review console at `http://127.0.0.1:8000/review/` or generated API docs at `http://127.0.0.1:8000/docs`.
 
 For n8n setup and webhook contracts, see [`n8n/README.md`](n8n/README.md).
 
@@ -202,8 +237,8 @@ Initial engineering targets include >=90% category accuracy, >=95% routing accur
 - [x] Workflow metrics foundation
 - [x] n8n intake workflow
 - [x] n8n review continuation workflow
+- [x] Human-review dashboard
 - [x] Backend CI foundation
-- [ ] Human-review dashboard
 - [ ] Evaluation harness
 - [ ] Expanded failure handling and observability
 - [ ] Deployment
@@ -211,4 +246,4 @@ Initial engineering targets include >=90% category accuracy, >=95% routing accur
 
 ## Next Implementation Step
 
-Build the **human-review dashboard** that reads persisted `awaiting_review` workflows and lets a reviewer inspect the original message, classification, retrieved sources, draft, confidence, and route, then choose **Approve**, **Edit & Approve**, **Reject**, or **Escalate**.
+Build the **evaluation harness** that runs the labeled synthetic ticket dataset through RelayDesk and calculates category accuracy, priority accuracy, risk recall, routing accuracy, schema success rate, failure rate, and benchmark latency without presenting synthetic results as production-client outcomes.

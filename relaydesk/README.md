@@ -2,9 +2,9 @@
 
 **AI Customer Support Triage & Resolution System**
 
-Status: **Project 01 — Human-review + evaluation system implemented**
+Status: **Project 01 — Reliability + observability layer implemented**
 
-RelayDesk turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts grounded responses, routes by confidence and risk, persists workflow state, sends uncertain cases through durable human review, and measures behavior with a reproducible synthetic benchmark.
+RelayDesk turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts grounded responses, routes by confidence and risk, persists workflow state, sends uncertain cases through durable human review, measures behavior with a reproducible synthetic benchmark, and records operational telemetry for failures and retries.
 
 ## Current Architecture
 
@@ -14,6 +14,8 @@ Incoming Request
 n8n Intake Webhook
       ↓
 FastAPI /process
+      ↓
+Idempotency Claim + Correlation ID
       ↓
 AI Classification → Structured Schema
       ↓
@@ -54,7 +56,35 @@ Auto Complete     Persist Awaiting Review
 - reproducible evaluation runner
 - per-ticket benchmark diagnostics
 - engineering-target pass/fail checks
+- ticket-level idempotency so duplicate requests do not repeat model work
+- `X-Correlation-ID` propagation through workflow state and audit events
+- provider retry telemetry for timeout/unavailable failures
+- structured persisted error codes and messages
+- classification, retrieval, drafting, and total latency tracking
+- operational metrics for failure rate, retries, replays, and stage latency
 - GitHub Actions CI with Ruff + pytest
+
+## Reliability and Observability
+
+`POST /api/v1/process` now claims each `ticket_id` before model execution. Repeating the same ticket returns the original workflow with `idempotent_replay: true` instead of making another provider call.
+
+Clients may send:
+
+```text
+X-Correlation-ID: your-request-id
+```
+
+The correlation ID is persisted with the workflow and copied into audit events. If none is supplied, RelayDesk uses the workflow ID.
+
+Provider timeout and unavailable errors are retried according to:
+
+```text
+LLM_MAX_RETRIES=1
+```
+
+Each retry creates a `provider_retry` audit event. Exhausted failures remain queryable as `failed` workflows with an `error_code`, `error_message`, retry count, and total latency.
+
+`GET /api/v1/metrics` now reports workflow counts plus failure rate, automation rate, idempotent replay count, provider retry count, and average classification/retrieval/drafting/completed latency.
 
 ## Evaluation Harness
 
@@ -66,17 +96,7 @@ Start RelayDesk with the configured model/provider available, then run:
 python -m evals.runner
 ```
 
-It writes machine-readable predictions and a report containing:
-
-- category accuracy
-- priority accuracy
-- risk recall
-- routing accuracy
-- schema success rate
-- workflow failure rate
-- automation rate
-- high-risk auto-processing violations
-- latency summaries
+It writes machine-readable predictions and a report containing category accuracy, priority accuracy, risk recall, routing accuracy, schema success rate, workflow failure rate, automation rate, high-risk auto-processing violations, and latency summaries.
 
 Existing predictions can be rescored without another model call:
 
@@ -128,11 +148,11 @@ Initial engineering targets remain targets until a real model run produces measu
 - [x] n8n orchestration
 - [x] Human-review dashboard
 - [x] Evaluation harness
+- [x] Expanded failure handling and observability
 - [x] Backend CI foundation
-- [ ] Expanded failure handling and observability
 - [ ] Deployment
 - [ ] Final case study + demo video
 
 ## Next Implementation Step
 
-Expand **failure handling and observability** with stage-level latency, correlation IDs, structured failure codes, retry/fallback telemetry, duplicate/idempotency handling, and richer operational metrics before deployment.
+Deploy RelayDesk on a **free-first public demo architecture** while preserving local Ollama support for development. The public deployment should use a provider path that can run without a permanently hosted GPU, keep secrets out of the repo, persist demo workflow state safely, expose the review console, and clearly label any demo-provider limitations.

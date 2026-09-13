@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -86,7 +85,10 @@ class WorkflowRepository:
         with self._connection() as connection:
             try:
                 connection.execute(
-                    "INSERT INTO idempotency_keys(ticket_id, workflow_id, created_at) VALUES (?, ?, ?)",
+                    """
+                    INSERT INTO idempotency_keys(ticket_id, workflow_id, created_at)
+                    VALUES (?, ?, ?)
+                    """,
                     (ticket_id, workflow_id, now),
                 )
                 return None

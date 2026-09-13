@@ -1,0 +1,37 @@
+[
+  {
+    "source_id": "kb-password-reset",
+    "title": "Password reset and account access",
+    "content": "Customers who cannot sign in should use the password reset link on the sign-in screen. Reset links expire after 30 minutes. Support must not ask customers to share passwords, one-time codes, recovery codes, or full payment details. If the customer reports an unfamiliar login, stolen credentials, or suspected account takeover, the ticket must be escalated for human security review."
+  },
+  {
+    "source_id": "kb-refunds",
+    "title": "Refund eligibility",
+    "content": "Refund requests can be reviewed within 14 days of purchase for eligible products. Support may explain the policy and collect the order number, but the AI system cannot issue, promise, approve, or deny a refund. Refund execution requires an authorized human or downstream billing tool. Chargebacks and payment disputes require human review."
+  },
+  {
+    "source_id": "kb-cancellation",
+    "title": "Subscription cancellation",
+    "content": "Customers may cancel an active subscription from account settings before the next renewal date. Cancellation stops future renewals but does not automatically create a refund for prior charges. If account access prevents cancellation, support may provide access-recovery instructions and escalate when identity or security concerns are present."
+  },
+  {
+    "source_id": "kb-shipping",
+    "title": "Shipping and delivery",
+    "content": "Customers can check shipment status using the tracking link in their order confirmation. A package marked delivered but not received should first be checked around the delivery location and with household members. Support may explain these steps but should not claim a replacement or refund has been issued unless a connected order system confirms that action."
+  },
+  {
+    "source_id": "kb-technical",
+    "title": "Technical troubleshooting",
+    "content": "For common application errors, ask the customer to refresh or restart the app, confirm network connectivity, update to the latest available version, and retry. If the issue persists, collect the device type, app version, approximate time of failure, and visible error message. Suspected data loss must be escalated for human review."
+  },
+  {
+    "source_id": "kb-privacy",
+    "title": "Privacy and data requests",
+    "content": "Requests to access, export, correct, or delete personal data are privacy requests and require human review. The AI assistant may acknowledge the request and explain that it will be routed to the appropriate team, but it must not claim the request has already been completed."
+  },
+  {
+    "source_id": "kb-product",
+    "title": "Product and feature questions",
+    "content": "For general product questions, support should answer only from documented product information. Feature requests can be recorded as feedback but should not be described as planned, scheduled, or guaranteed unless an approved source explicitly states that commitment."
+  }
+]

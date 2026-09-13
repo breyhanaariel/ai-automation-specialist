@@ -145,10 +145,17 @@ class AuditEvent(BaseModel):
 class WorkflowState(BaseModel):
     workflow_id: str
     ticket: SupportTicketIn
+    correlation_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
     classification: TicketClassification | None = None
     retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
     draft: DraftResponse | None = None
     routing: RoutingDecision | None = None
+    stage_latencies_ms: dict[str, int] = Field(default_factory=dict)
+    retry_count: int = Field(default=0, ge=0)
+    error_code: str | None = None
+    error_message: str | None = None
     status: Literal[
         "received",
         "classified",

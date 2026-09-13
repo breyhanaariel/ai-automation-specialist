@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class TicketCategory(str, Enum):
+class TicketCategory(StrEnum):
     ACCOUNT_ACCESS = "account_access"
     BILLING = "billing"
     CANCELLATION = "cancellation"
@@ -20,21 +20,21 @@ class TicketCategory(str, Enum):
     OTHER = "other"
 
 
-class Priority(str, Enum):
+class Priority(StrEnum):
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
     URGENT = "urgent"
 
 
-class Sentiment(str, Enum):
+class Sentiment(StrEnum):
     POSITIVE = "positive"
     NEUTRAL = "neutral"
     NEGATIVE = "negative"
     ANGRY = "angry"
 
 
-class RiskFlag(str, Enum):
+class RiskFlag(StrEnum):
     ACCOUNT_SECURITY = "account_security"
     PAYMENT_DISPUTE = "payment_dispute"
     LEGAL_THREAT = "legal_threat"
@@ -46,14 +46,14 @@ class RiskFlag(str, Enum):
     NONE = "none"
 
 
-class RecommendedRoute(str, Enum):
+class RecommendedRoute(StrEnum):
     AUTO_ELIGIBLE = "auto_eligible"
     HUMAN_VERIFY = "human_verify"
     HUMAN_REVIEW = "human_review"
     MANUAL = "manual"
 
 
-class ReviewAction(str, Enum):
+class ReviewAction(StrEnum):
     APPROVE = "approve"
     EDIT_AND_APPROVE = "edit_and_approve"
     REJECT = "reject"

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <title>RelayDesk Review Console</title>
+  <link rel="stylesheet" href="/review/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#review-detail">Skip to review details</a>
+  <header class="topbar">
+    <div class="brand-wrap">
+      <div class="brand-mark">R</div>
+      <div>
+        <p class="eyebrow">RelayDesk</p>
+        <h1>Human Review Console</h1>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span class="status-copy">Review queue live</span>
+      <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh review queue">↻</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="queue-panel" aria-label="Review queue">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">Needs judgment</p>
+          <h2>Review Queue</h2>
+        </div>
+        <span id="queue-count" class="count-badge">0</span>
+      </div>
+
+      <div class="queue-filter-row">
+        <span class="filter-chip active">Awaiting review</span>
+        <span id="queue-sync" class="subtle">Not synced yet</span>
+      </div>
+
+      <div id="queue-list" class="queue-list" aria-live="polite"></div>
+
+      <div class="reviewer-card">
+        <label for="reviewer-id">Reviewer ID</label>
+        <input id="reviewer-id" type="text" value="brianna" maxlength="120" autocomplete="off" />
+        <p>Saved locally on this device for review audit records.</p>
+      </div>
+    </aside>
+
+    <section id="review-detail" class="detail-panel" tabindex="-1">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">✓</div>
+        <p class="eyebrow">Nothing selected</p>
+        <h2>Choose a ticket from the review queue.</h2>
+        <p>RelayDesk will show the customer request, AI classification, retrieved evidence, draft response, routing logic, and audit history here.</p>
+      </div>
+
+      <div id="review-content" class="review-content hidden">
+        <div class="ticket-hero">
+          <div>
+            <div class="ticket-meta-line">
+              <span id="priority-pill" class="pill">Normal</span>
+              <span id="category-pill" class="pill secondary">Product question</span>
+              <span id="ticket-id" class="mono subtle"></span>
+            </div>
+            <h2 id="intent-summary">Ticket summary</h2>
+            <p id="route-reason" class="route-reason"></p>
+          </div>
+          <div class="confidence-card" aria-label="Model confidence">
+            <span id="confidence-value" class="confidence-value">0%</span>
+            <span class="confidence-label">confidence</span>
+          </div>
+        </div>
+
+        <div class="two-column-grid">
+          <article class="card message-card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">Original request</p>
+                <h3>Customer Message</h3>
+              </div>
+              <span id="received-at" class="subtle"></span>
+            </div>
+            <blockquote id="customer-message"></blockquote>
+            <div id="customer-meta" class="meta-grid"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-heading">
+              <div>
+                <p class="eyebrow">AI assessment</p>
+                <h3>Classification</h3>
+              </div>
+              <span id="sentiment-pill" class="pill tertiary">Neutral</span>
+            </div>
+            <dl class="definition-grid">
+              <div><dt>Category</dt><dd id="classification-category"></dd></div>
+              <div><dt>Priority</dt><dd id="classification-priority"></dd></div>
+              <div><dt>Model Route</dt><dd id="model-route"></dd></div>
+              <div><dt>Final Route</dt><dd id="final-route"></dd></div>
+            </dl>
+            <div class="rationale-box">
+              <span>Reasoning summary</span>
+              <p id="rationale-summary"></p>
+            </div>
+            <div>
+              <span class="section-label">Risk flags</span>
+              <div id="risk-flags" class="chip-row"></div>
+            </div>
+          </article>
+        </div>
+
+        <article class="card evidence-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Grounding context</p>
+              <h3>Retrieved Sources</h3>
+            </div>
+            <span id="source-count" class="count-badge small">0</span>
+          </div>
+          <div id="source-list" class="source-list"></div>
+        </article>
+
+        <article class="card draft-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Proposed reply</p>
+              <h3>AI Draft</h3>
+            </div>
+            <div id="draft-flags" class="chip-row"></div>
+          </div>
+          <textarea id="draft-text" rows="9" maxlength="5000" aria-label="Draft response"></textarea>
+          <p class="edit-hint">Edit the response before choosing “Edit & Approve.” Approve sends the original AI draft unchanged.</p>
+        </article>
+
+        <article class="card audit-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Traceability</p>
+              <h3>Audit Timeline</h3>
+            </div>
+          </div>
+          <ol id="audit-list" class="audit-list"></ol>
+        </article>
+
+        <article class="decision-card">
+          <div class="decision-copy">
+            <p class="eyebrow">Human decision</p>
+            <h3>What should happen next?</h3>
+            <label for="review-notes">Reviewer notes <span class="subtle">optional</span></label>
+            <textarea id="review-notes" rows="3" maxlength="1000" placeholder="Add context for the audit trail…"></textarea>
+          </div>
+          <div class="decision-actions">
+            <button class="action-button approve" data-action="approve" type="button">Approve</button>
+            <button class="action-button edit" data-action="edit_and_approve" type="button">Edit & Approve</button>
+            <button class="action-button reject" data-action="reject" type="button">Reject</button>
+            <button class="action-button escalate" data-action="escalate" type="button">Escalate</button>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/review/app.js" defer></script>
+</body>
+</html>

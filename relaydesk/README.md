@@ -2,9 +2,9 @@
 
 **AI Customer Support Triage & Resolution System**
 
-Status: **Project 01 — In development**
+Status: **Project 01 — Foundation complete, backend implementation next**
 
-RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It will turn incoming support requests into validated structured data, retrieve relevant knowledge, draft responses, route by confidence/risk, and send uncertain cases to a real human review experience.
+RelayDesk is the first flagship system in the AI Automation Specialist portfolio. It turns incoming support requests into validated structured data, retrieves relevant knowledge, drafts responses, routes by confidence/risk, and sends uncertain cases to a real human review experience.
 
 ## Business Problem
 
@@ -19,7 +19,7 @@ A manual support workflow often looks like:
 7. Assign/escalate the ticket
 8. Record the action
 
-RelayDesk will automate the repetitive portions while preserving human judgment for uncertain or higher-risk cases.
+RelayDesk automates the repetitive portions while preserving human judgment for uncertain or higher-risk cases.
 
 ## Target Architecture
 
@@ -45,44 +45,124 @@ Auto Route       Human Review
       Audit + Metrics
 ```
 
-## Planned Technical Coverage
+## What Is Implemented Now
 
-- n8n orchestration
-- Python + FastAPI
-- Pydantic structured outputs
-- provider abstraction for Ollama / cloud LLMs
-- RAG / knowledge retrieval
-- confidence and policy routing
-- human review: approve, edit & approve, reject, escalate
-- retries and fallbacks
-- audit logging
-- benchmark/evaluation dataset
-- measurable before/after results
-- polished web dashboard
-- free-first deployment strategy
+The project foundation now includes:
+
+- explicit product and automation requirements
+- backend architecture boundaries
+- 32 labeled synthetic benchmark tickets
+- Pydantic domain schemas
+- vendor-neutral LLM provider interface
+- normalized provider failure types
+- zero-cost Ollama-first configuration
+- optional cloud-provider configuration contract
+- deterministic confidence-routing thresholds
+- benchmark/evaluation plan and quality targets
+- Python project/dependency configuration
+- environment-variable template
+
+## Current Repository Structure
+
+```text
+relaydesk/
+├── .env.example
+├── README.md
+├── pyproject.toml
+├── backend/
+│   └── app/
+│       ├── __init__.py
+│       ├── config.py
+│       ├── schemas.py
+│       └── providers/
+│           ├── __init__.py
+│           ├── base.py
+│           └── README.md
+├── data/
+│   └── support_tickets.jsonl
+└── docs/
+    ├── architecture.md
+    ├── evaluation-plan.md
+    └── requirements.md
+```
+
+## Routing Policy
+
+The model may recommend a route, but deterministic application logic owns the final route.
+
+Initial policy:
+
+```text
+risk flag present        → human review
+confidence >= 0.90       → auto eligible
+confidence 0.70–0.89     → human verification
+confidence < 0.70        → manual processing
+```
+
+Thresholds are configurable and are not buried inside model prompts.
+
+## Provider Strategy
+
+RelayDesk is designed so business logic does not depend directly on one AI vendor.
+
+Planned runtime options:
+
+- Ollama/local models — primary zero-cost path
+- OpenAI-compatible APIs — optional
+- Anthropic — optional
+- Gemini — optional
+
+The application talks to a common `LLMProvider` interface instead of importing provider SDK objects throughout the codebase.
 
 ## Measurement Rules
 
-Portfolio metrics will never be presented as real production-client results unless they actually are. Simulated/test results will be labeled as benchmark or projected impact.
+Portfolio metrics will never be presented as real production-client results unless they actually are. Simulated/test results will be labeled as benchmark results.
 
 Planned benchmark outputs include:
 
-- classification accuracy
+- category accuracy
+- priority accuracy
+- risk recall
+- routing accuracy
 - automation rate
 - human override rate
+- schema success rate
 - processing latency
 - failed workflow rate
 - manual-step reduction
 
+Initial engineering targets include >=90% category accuracy, >=95% routing accuracy, >=95% risk recall, and zero incorrectly auto-processed high-risk benchmark tickets.
+
 ## Build Sequence
 
-1. Requirements + synthetic dataset
-2. Schemas and provider abstraction
-3. FastAPI service
-4. n8n workflow
-5. retrieval layer
-6. human-review dashboard
-7. evaluation harness
-8. failure handling and observability
-9. deployment
-10. final case study + demo video
+- [x] Requirements
+- [x] Synthetic labeled dataset
+- [x] Domain schemas
+- [x] Backend architecture
+- [x] Provider abstraction contract
+- [x] Evaluation plan
+- [ ] Provider factory + Ollama adapter
+- [ ] Classification service
+- [ ] Deterministic routing service
+- [ ] FastAPI endpoints
+- [ ] Tests for schemas, routing, and provider failures
+- [ ] n8n workflow
+- [ ] Retrieval layer
+- [ ] Human-review dashboard
+- [ ] Evaluation harness
+- [ ] Failure handling and observability
+- [ ] Deployment
+- [ ] Final case study + demo video
+
+## Next Implementation Step
+
+Build the actual Python backend core:
+
+1. provider factory
+2. Ollama structured-output adapter
+3. classification service
+4. deterministic routing service
+5. first FastAPI endpoint
+6. automated tests
+
+No n8n or dashboard work starts until this core can classify and route benchmark tickets reliably.

@@ -13,7 +13,9 @@ from app.providers.base import ProviderError
 from app.providers.factory import build_provider
 from app.schemas import (
     AuditEvent,
+    HumanReviewDecision,
     RecommendedRoute,
+    ReviewAction,
     RoutingDecision,
     SupportTicketIn,
     TicketClassification,
@@ -223,6 +225,67 @@ async def process_ticket(
         "routing": routing,
         "status": state.status,
         "latency_ms": latency_ms,
+    }
+
+
+@router.post("/workflows/{workflow_id}/review")
+async def review_workflow(
+    workflow_id: str,
+    decision: HumanReviewDecision,
+    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+) -> dict[str, object]:
+    state = repository.get_workflow(workflow_id)
+    if state is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+    if state.status != "awaiting_review":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Workflow is not awaiting review; current status is {state.status}",
+        )
+    if decision.ticket_id != state.ticket.ticket_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Review ticket_id does not match workflow ticket_id",
+        )
+    if decision.action == ReviewAction.EDIT_AND_APPROVE and not decision.edited_response:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="edited_response is required for edit_and_approve",
+        )
+
+    if decision.action == ReviewAction.EDIT_AND_APPROVE and state.draft is not None:
+        state.draft.draft_text = decision.edited_response or state.draft.draft_text
+
+    if decision.action in {ReviewAction.APPROVE, ReviewAction.EDIT_AND_APPROVE}:
+        state.status = "completed"
+    elif decision.action == ReviewAction.REJECT:
+        state.status = "rejected"
+    else:
+        state.status = "escalated"
+
+    repository.save_workflow(state)
+    repository.add_audit_event(
+        audit_event(
+            workflow_id=workflow_id,
+            ticket_id=state.ticket.ticket_id,
+            event_type="human_review_decided",
+            details={
+                "action": decision.action.value,
+                "reviewer_id": decision.reviewer_id,
+                "reviewed_at": decision.reviewed_at.isoformat(),
+                "notes": decision.notes or "",
+                "edited": decision.action == ReviewAction.EDIT_AND_APPROVE,
+                "resulting_status": state.status,
+            },
+        )
+    )
+
+    return {
+        "workflow_id": workflow_id,
+        "ticket_id": state.ticket.ticket_id,
+        "action": decision.action,
+        "status": state.status,
+        "draft": state.draft,
     }
 
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.config import Settings
 from app.schemas import (
     Priority,
@@ -12,7 +10,12 @@ from app.schemas import (
 from app.services.routing import decide_route
 
 
-def classification(*, confidence: float, risk_flags: list[RiskFlag], model_route: RecommendedRoute) -> TicketClassification:
+def classification(
+    *,
+    confidence: float,
+    risk_flags: list[RiskFlag],
+    model_route: RecommendedRoute,
+) -> TicketClassification:
     return TicketClassification(
         category=TicketCategory.PRODUCT_QUESTION,
         intent_summary="Customer asks a routine product question.",

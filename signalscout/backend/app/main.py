@@ -1,7 +1,12 @@
 from fastapi import FastAPI, HTTPException
 
 from app.config import get_settings
-from app.schemas import HealthResponse, LeadScore, ScoringWeights
+from app.schemas import (
+    HealthResponse,
+    LeadScore,
+    ScoringPreviewRequest,
+    ScoringWeights,
+)
 from app.scoring import score_lead
 
 settings = get_settings()
@@ -23,15 +28,12 @@ def scoring_defaults() -> ScoringWeights:
 
 
 @app.post("/api/v1/scoring/preview", response_model=LeadScore)
-def preview_score(
-    signals: dict[str, float],
-    weights: ScoringWeights | None = None,
-) -> LeadScore:
-    resolved_weights = weights or ScoringWeights()
+def preview_score(request: ScoringPreviewRequest) -> LeadScore:
+    resolved_weights = request.weights or ScoringWeights()
     explanations = {name: "Preview signal." for name in resolved_weights.model_dump()}
     try:
         return score_lead(
-            signals=signals,
+            signals=request.signals,
             explanations=explanations,
             weights=resolved_weights,
             config_version="preview-v1",

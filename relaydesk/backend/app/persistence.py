@@ -18,7 +18,7 @@ class WorkflowRepository:
     def _database_path(database_url: str) -> str:
         prefix = "sqlite:///"
         if not database_url.startswith(prefix):
-            raise ValueError("RelayDesk currently supports sqlite:/// database URLs only")
+            raise ValueError("RelayDesk SQLite repository requires sqlite:/// database URLs")
         path = database_url.removeprefix(prefix)
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +148,11 @@ class WorkflowRepository:
             return None
         return WorkflowState.model_validate_json(row["state_json"])
 
-    def list_workflows(self, status: str | None = None, limit: int = 100) -> list[WorkflowState]:
+    def list_workflows(
+        self,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[WorkflowState]:
         with self._connection() as connection:
             if status is None:
                 rows = connection.execute(
@@ -199,32 +203,30 @@ class WorkflowRepository:
 
     def metrics(self) -> dict[str, int | float]:
         with self._connection() as connection:
-            total = connection.execute("SELECT COUNT(*) FROM workflows").fetchone()[0]
-            completed = connection.execute(
-                "SELECT COUNT(*) FROM workflows WHERE status = 'completed'"
-            ).fetchone()[0]
-            awaiting_review = connection.execute(
-                "SELECT COUNT(*) FROM workflows WHERE status = 'awaiting_review'"
-            ).fetchone()[0]
-            failed = connection.execute(
-                "SELECT COUNT(*) FROM workflows WHERE status = 'failed'"
-            ).fetchone()[0]
+            rows = connection.execute("SELECT status, state_json FROM workflows").fetchall()
             replay_count = connection.execute(
                 "SELECT COUNT(*) FROM audit_events WHERE event_type = 'idempotent_replay'"
             ).fetchone()[0]
-            rows = connection.execute("SELECT state_json FROM workflows").fetchall()
 
-        completed_latencies: list[int] = []
+        total = len(rows)
+        completed = sum(1 for row in rows if row["status"] == "completed")
+        ready_for_action = sum(1 for row in rows if row["status"] == "ready_for_action")
+        awaiting_review = sum(1 for row in rows if row["status"] == "awaiting_review")
+        rejected = sum(1 for row in rows if row["status"] == "rejected")
+        escalated = sum(1 for row in rows if row["status"] == "escalated")
+        failed = sum(1 for row in rows if row["status"] == "failed")
+        retries = 0
+        processing_latencies: list[int] = []
         classification_latencies: list[int] = []
         retrieval_latencies: list[int] = []
         drafting_latencies: list[int] = []
-        retries = 0
+
         for row in rows:
             state = WorkflowState.model_validate_json(row["state_json"])
             retries += state.retry_count
             timings = state.stage_latencies_ms
-            if state.status == "completed" and "total" in timings:
-                completed_latencies.append(timings["total"])
+            if "total" in timings:
+                processing_latencies.append(timings["total"])
             if "classification" in timings:
                 classification_latencies.append(timings["classification"])
             if "retrieval" in timings:
@@ -235,18 +237,21 @@ class WorkflowRepository:
         def average(values: list[int]) -> float:
             return round(sum(values) / len(values), 2) if values else 0.0
 
-        automation_rate = round((completed / total) * 100, 2) if total else 0.0
+        ready_rate = round((ready_for_action / total) * 100, 2) if total else 0.0
         failure_rate = round((failed / total) * 100, 2) if total else 0.0
         return {
             "total_workflows": total,
+            "ready_for_action": ready_for_action,
             "completed": completed,
             "awaiting_review": awaiting_review,
+            "rejected": rejected,
+            "escalated": escalated,
             "failed": failed,
             "failure_rate_percent": failure_rate,
-            "automation_rate_percent": automation_rate,
+            "auto_ready_rate_percent": ready_rate,
             "idempotent_replays": replay_count,
             "provider_retries": retries,
-            "average_completed_latency_ms": average(completed_latencies),
+            "average_processing_latency_ms": average(processing_latencies),
             "average_classification_latency_ms": average(classification_latencies),
             "average_retrieval_latency_ms": average(retrieval_latencies),
             "average_drafting_latency_ms": average(drafting_latencies),

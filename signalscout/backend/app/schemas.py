@@ -76,6 +76,11 @@ class ScoringWeights(BaseModel):
         return value
 
 
+class ScoringPreviewRequest(BaseModel):
+    signals: dict[str, float]
+    weights: ScoringWeights | None = None
+
+
 class ScoreComponent(BaseModel):
     name: str
     raw_score: float = Field(ge=0, le=1)

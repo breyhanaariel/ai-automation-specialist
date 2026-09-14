@@ -62,13 +62,13 @@ def test_audit_events_are_returned_in_time_order(tmp_path) -> None:
     assert [event.event_id for event in events] == ["event-1", "event-2"]
 
 
-def test_metrics_report_reliability_and_stage_latency(tmp_path) -> None:
+def test_metrics_report_final_states_and_stage_latency(tmp_path) -> None:
     repository = WorkflowRepository(f"sqlite:///{tmp_path / 'relaydesk.db'}")
     states = [
         WorkflowState(
             workflow_id="workflow-1",
             ticket=ticket("persist-1"),
-            status="completed",
+            status="ready_for_action",
             stage_latencies_ms={
                 "classification": 40,
                 "retrieval": 10,
@@ -109,14 +109,15 @@ def test_metrics_report_reliability_and_stage_latency(tmp_path) -> None:
     )
     metrics = repository.metrics()
     assert metrics["total_workflows"] == 3
-    assert metrics["completed"] == 1
+    assert metrics["ready_for_action"] == 1
+    assert metrics["completed"] == 0
     assert metrics["awaiting_review"] == 1
     assert metrics["failed"] == 1
     assert metrics["failure_rate_percent"] == 33.33
-    assert metrics["automation_rate_percent"] == 33.33
+    assert metrics["auto_ready_rate_percent"] == 33.33
     assert metrics["idempotent_replays"] == 1
     assert metrics["provider_retries"] == 1
-    assert metrics["average_completed_latency_ms"] == 120.0
+    assert metrics["average_processing_latency_ms"] == 80.0
     assert metrics["average_classification_latency_ms"] == 28.33
     assert metrics["average_retrieval_latency_ms"] == 8.0
     assert metrics["average_drafting_latency_ms"] == 45.0

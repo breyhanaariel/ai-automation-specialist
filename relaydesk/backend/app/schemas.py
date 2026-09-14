@@ -162,6 +162,7 @@ class WorkflowState(BaseModel):
         "retrieved",
         "drafted",
         "awaiting_review",
+        "ready_for_action",
         "completed",
         "rejected",
         "escalated",

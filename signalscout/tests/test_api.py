@@ -23,12 +23,14 @@ def test_preview_scoring_endpoint() -> None:
     response = client.post(
         "/api/v1/scoring/preview",
         json={
-            "company_fit": 1,
-            "role_fit": 1,
-            "intent": 1,
-            "data_quality": 1,
-            "geography": 1,
-            "source_quality": 1,
+            "signals": {
+                "company_fit": 1,
+                "role_fit": 1,
+                "intent": 1,
+                "data_quality": 1,
+                "geography": 1,
+                "source_quality": 1,
+            }
         },
     )
     assert response.status_code == 200

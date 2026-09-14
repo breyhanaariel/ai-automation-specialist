@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from app.config import Settings, get_settings
 from app.persistence import WorkflowRepository
+from app.persistence_postgres import PostgresWorkflowRepository
 from app.providers.base import (
     ProviderError,
     ProviderTimeoutError,
@@ -33,9 +34,12 @@ from app.services.routing import decide_route
 
 router = APIRouter(prefix="/api/v1", tags=["classification"])
 R = TypeVar("R")
+Repository = WorkflowRepository | PostgresWorkflowRepository
 
 
-def get_repository(settings: Annotated[Settings, Depends(get_settings)]) -> WorkflowRepository:
+def get_repository(settings: Annotated[Settings, Depends(get_settings)]) -> Repository:
+    if settings.database_url.startswith(("postgres://", "postgresql://")):
+        return PostgresWorkflowRepository(settings.database_url)
     return WorkflowRepository(settings.database_url)
 
 
@@ -132,7 +136,7 @@ async def classify_ticket(
 async def process_ticket(
     ticket: SupportTicketIn,
     settings: Annotated[Settings, Depends(get_settings)],
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
     correlation_id: Annotated[str | None, Header(alias="X-Correlation-ID")] = None,
 ) -> dict[str, object]:
     workflow_id = str(uuid4())
@@ -336,10 +340,17 @@ async def process_ticket(
             model_recommendation=routing.model_recommendation,
             policy_overrode_model=True,
         )
+    elif draft.requires_account_action:
+        routing = RoutingDecision(
+            route=RecommendedRoute.HUMAN_REVIEW,
+            reason="Account-changing action requires human approval before execution.",
+            model_recommendation=routing.model_recommendation,
+            policy_overrode_model=True,
+        )
 
     state.routing = routing
     state.status = (
-        "completed"
+        "ready_for_action"
         if routing.route == RecommendedRoute.AUTO_ELIGIBLE
         else "awaiting_review"
     )
@@ -349,7 +360,7 @@ async def process_ticket(
         audit_event(
             workflow_id=workflow_id,
             ticket_id=ticket.ticket_id,
-            event_type="workflow_completed",
+            event_type="workflow_routed",
             provider=provider.name,
             model=provider.model,
             latency_ms=state.stage_latencies_ms["total"],
@@ -366,7 +377,7 @@ async def process_ticket(
 
 @router.get("/workflows")
 async def list_workflows(
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
     workflow_status: Annotated[str | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> list[WorkflowState]:
@@ -377,7 +388,7 @@ async def list_workflows(
 async def review_workflow(
     workflow_id: str,
     decision: HumanReviewDecision,
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
 ) -> dict[str, object]:
     state = repository.get_workflow(workflow_id)
     if state is None:
@@ -407,7 +418,7 @@ async def review_workflow(
     if decision.action == ReviewAction.EDIT_AND_APPROVE and state.draft is not None:
         state.draft.draft_text = decision.edited_response or state.draft.draft_text
     if decision.action in {ReviewAction.APPROVE, ReviewAction.EDIT_AND_APPROVE}:
-        state.status = "completed"
+        state.status = "ready_for_action"
     elif decision.action == ReviewAction.REJECT:
         state.status = "rejected"
     else:
@@ -439,10 +450,38 @@ async def review_workflow(
     }
 
 
+@router.post("/workflows/{workflow_id}/complete")
+async def complete_workflow(
+    workflow_id: str,
+    repository: Annotated[Repository, Depends(get_repository)],
+) -> dict[str, object]:
+    state = repository.get_workflow(workflow_id)
+    if state is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
+    if state.status != "ready_for_action":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Workflow is not ready for action; current status is {state.status}",
+        )
+    state.status = "completed"
+    repository.save_workflow(state)
+    repository.add_audit_event(
+        audit_event(
+            workflow_id=workflow_id,
+            ticket_id=state.ticket.ticket_id,
+            event_type="workflow_completed",
+            provider=state.provider,
+            model=state.model,
+            details={"correlation_id": state.correlation_id or ""},
+        )
+    )
+    return workflow_response(state)
+
+
 @router.get("/workflows/{workflow_id}")
 async def get_workflow(
     workflow_id: str,
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
 ) -> WorkflowState:
     state = repository.get_workflow(workflow_id)
     if state is None:
@@ -456,7 +495,7 @@ async def get_workflow(
 @router.get("/workflows/{workflow_id}/audit")
 async def get_workflow_audit(
     workflow_id: str,
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
 ) -> list[AuditEvent]:
     if repository.get_workflow(workflow_id) is None:
         raise HTTPException(
@@ -468,6 +507,6 @@ async def get_workflow_audit(
 
 @router.get("/metrics")
 async def get_metrics(
-    repository: Annotated[WorkflowRepository, Depends(get_repository)],
+    repository: Annotated[Repository, Depends(get_repository)],
 ) -> dict[str, int | float]:
     return repository.metrics()

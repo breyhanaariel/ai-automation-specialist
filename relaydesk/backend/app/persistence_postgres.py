@@ -132,7 +132,11 @@ class PostgresWorkflowRepository:
                 row = cursor.fetchone()
         return None if row is None else WorkflowState.model_validate_json(row["state_json"])
 
-    def list_workflows(self, status: str | None = None, limit: int = 100) -> list[WorkflowState]:
+    def list_workflows(
+        self,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[WorkflowState]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 if status is None:
@@ -195,16 +199,20 @@ class PostgresWorkflowRepository:
                 cursor.execute("SELECT status, state_json::text AS state_json FROM workflows")
                 rows = cursor.fetchall()
                 cursor.execute(
-                    "SELECT COUNT(*) AS count FROM audit_events WHERE event_type = 'idempotent_replay'"
+                    "SELECT COUNT(*) AS count FROM audit_events "
+                    "WHERE event_type = 'idempotent_replay'"
                 )
                 replay_count = int(cursor.fetchone()["count"])
 
         total = len(rows)
         completed = sum(1 for row in rows if row["status"] == "completed")
+        ready_for_action = sum(1 for row in rows if row["status"] == "ready_for_action")
         awaiting_review = sum(1 for row in rows if row["status"] == "awaiting_review")
+        rejected = sum(1 for row in rows if row["status"] == "rejected")
+        escalated = sum(1 for row in rows if row["status"] == "escalated")
         failed = sum(1 for row in rows if row["status"] == "failed")
         retries = 0
-        completed_latencies: list[int] = []
+        processing_latencies: list[int] = []
         classification_latencies: list[int] = []
         retrieval_latencies: list[int] = []
         drafting_latencies: list[int] = []
@@ -213,8 +221,8 @@ class PostgresWorkflowRepository:
             state = WorkflowState.model_validate_json(row["state_json"])
             retries += state.retry_count
             timings = state.stage_latencies_ms
-            if state.status == "completed" and "total" in timings:
-                completed_latencies.append(timings["total"])
+            if "total" in timings:
+                processing_latencies.append(timings["total"])
             if "classification" in timings:
                 classification_latencies.append(timings["classification"])
             if "retrieval" in timings:
@@ -225,16 +233,21 @@ class PostgresWorkflowRepository:
         def average(values: list[int]) -> float:
             return round(sum(values) / len(values), 2) if values else 0.0
 
+        ready_rate = round((ready_for_action / total) * 100, 2) if total else 0.0
+        failure_rate = round((failed / total) * 100, 2) if total else 0.0
         return {
             "total_workflows": total,
+            "ready_for_action": ready_for_action,
             "completed": completed,
             "awaiting_review": awaiting_review,
+            "rejected": rejected,
+            "escalated": escalated,
             "failed": failed,
-            "failure_rate_percent": round((failed / total) * 100, 2) if total else 0.0,
-            "automation_rate_percent": round((completed / total) * 100, 2) if total else 0.0,
+            "failure_rate_percent": failure_rate,
+            "auto_ready_rate_percent": ready_rate,
             "idempotent_replays": replay_count,
             "provider_retries": retries,
-            "average_completed_latency_ms": average(completed_latencies),
+            "average_processing_latency_ms": average(processing_latencies),
             "average_classification_latency_ms": average(classification_latencies),
             "average_retrieval_latency_ms": average(retrieval_latencies),
             "average_drafting_latency_ms": average(drafting_latencies),

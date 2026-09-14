@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Intelligent lead qualification and CRM automation system for the Brianna Dickenson AI Automation portfolio"
 requires-python = ">=3.11"
 dependencies = [
+  "email-validator>=2.2,<3.0",
   "fastapi>=0.116,<1.0",
   "httpx>=0.28,<1.0",
   "psycopg[binary]>=3.2,<4.0",

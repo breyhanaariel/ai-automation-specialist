@@ -50,7 +50,7 @@ def review_payload(action: str, edited_response: str | None = None) -> dict[str,
     }
 
 
-def test_approve_resumes_persisted_workflow(tmp_path) -> None:
+def test_approve_moves_workflow_to_ready_for_action(tmp_path) -> None:
     repository = WorkflowRepository(f"sqlite:///{tmp_path / 'review.db'}")
     seed_awaiting_review(repository)
     app.dependency_overrides[get_repository] = lambda: repository
@@ -65,10 +65,10 @@ def test_approve_resumes_persisted_workflow(tmp_path) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json()["status"] == "completed"
+    assert response.json()["status"] == "ready_for_action"
     saved = repository.get_workflow("workflow-review-001")
     assert saved is not None
-    assert saved.status == "completed"
+    assert saved.status == "ready_for_action"
     events = repository.list_audit_events("workflow-review-001")
     assert events[-1].event_type == "human_review_decided"
     assert events[-1].details["action"] == "approve"
@@ -91,9 +91,31 @@ def test_edit_and_approve_persists_reviewer_edit(tmp_path) -> None:
     assert response.status_code == 200
     saved = repository.get_workflow("workflow-review-001")
     assert saved is not None
-    assert saved.status == "completed"
+    assert saved.status == "ready_for_action"
     assert saved.draft is not None
     assert saved.draft.draft_text == "Reviewer-approved edited response."
+
+
+def test_ready_workflow_completes_only_after_action_execution(tmp_path) -> None:
+    repository = WorkflowRepository(f"sqlite:///{tmp_path / 'complete.db'}")
+    state = seed_awaiting_review(repository)
+    state.status = "ready_for_action"
+    repository.save_workflow(state)
+    app.dependency_overrides[get_repository] = lambda: repository
+    client = TestClient(app)
+
+    try:
+        response = client.post("/api/v1/workflows/workflow-review-001/complete")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    saved = repository.get_workflow("workflow-review-001")
+    assert saved is not None
+    assert saved.status == "completed"
+    events = repository.list_audit_events("workflow-review-001")
+    assert events[-1].event_type == "workflow_completed"
 
 
 def test_reject_and_escalate_have_distinct_terminal_states(tmp_path) -> None:
@@ -113,10 +135,9 @@ def test_reject_and_escalate_have_distinct_terminal_states(tmp_path) -> None:
         state = seed_awaiting_review(repository)
         state.workflow_id = "workflow-review-002"
         repository.save_workflow(state)
-        escalated_payload = review_payload("escalate")
         escalated = client.post(
             "/api/v1/workflows/workflow-review-002/review",
-            json=escalated_payload,
+            json=review_payload("escalate"),
         )
         assert escalated.status_code == 200
         assert escalated.json()["status"] == "escalated"

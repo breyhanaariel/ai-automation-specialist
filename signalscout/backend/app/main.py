@@ -10,8 +10,11 @@ from app.schemas import (
 )
 from app.normalization import normalize_lead
 from app.scoring import score_lead
+from app.persistence import Store
+from app.workflow import process_lead
 
 settings = get_settings()
+store = Store()
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
 
@@ -47,3 +50,18 @@ def preview_score(request: ScoringPreviewRequest) -> LeadScore:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/leads/process")
+def process_lead_endpoint(lead: LeadSubmission) -> dict:
+    return process_lead(lead, store)
+
+
+@app.get("/api/v1/leads")
+def list_leads() -> list[dict]:
+    return store.list()
+
+
+@app.get("/api/v1/metrics")
+def metrics() -> dict:
+    return store.metrics()

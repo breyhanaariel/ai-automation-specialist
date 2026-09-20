@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.schemas import (
@@ -15,7 +19,7 @@ from app.workflow import process_lead
 
 settings = get_settings()
 store = Store()
-app = FastAPI(title=settings.app_name, version="0.1.0")
+app = FastAPI(title=settings.app_name, version="1.0.0")\nDASHBOARD = Path(__file__).resolve().parents[2] / "dashboard"\nif DASHBOARD.exists():\n    app.mount("/dashboard", StaticFiles(directory=DASHBOARD), name="dashboard")
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -65,3 +69,8 @@ def list_leads() -> list[dict]:
 @app.get("/api/v1/metrics")
 def metrics() -> dict:
     return store.metrics()
+
+
+@app.get("/")
+def dashboard_home() -> FileResponse:
+    return FileResponse(DASHBOARD / "index.html")

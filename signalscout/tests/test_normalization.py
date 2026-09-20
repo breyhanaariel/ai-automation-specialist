@@ -35,10 +35,10 @@ def test_normalize_lead_uses_email_domain_when_company_domain_missing() -> None:
     lead = LeadSubmission(
         lead_id="lead-002",
         full_name="Jordan Lee",
-        email="jordan@acme.test",
+        email="jordan@acme-example.com",
         company_name="Acme",
         source=LeadSource.API,
         received_at=datetime.now(UTC),
     )
     result = normalize_lead(lead)
-    assert result.lead.company_domain == "acme.test"
+    assert result.lead.company_domain == "acme-example.com"

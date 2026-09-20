@@ -2,7 +2,7 @@
 
 **Intelligent Lead Qualification & CRM Automation**
 
-Status: **Project 02 — Foundation + specification implemented**
+Status: **Project 02 — Intake + normalization in progress**
 
 SignalScout is a portfolio-grade B2B lead qualification and CRM automation system. It is designed to intake leads from website forms, CSV/manual imports, and APIs; validate and enrich them; calculate an explainable 0-100 lead score; apply deterministic business-rule overrides; synchronize approved leads to a CRM adapter; draft personalized outreach; and require human approval before any outbound message.
 
@@ -116,7 +116,7 @@ http://127.0.0.1:8000/docs
 Current endpoints:
 - `GET /health`
 - `GET /api/v1/scoring/defaults`
-- `POST /api/v1/scoring/preview`
+- `POST /api/v1/scoring/preview`\n- `POST /api/v1/leads/normalize`
 
 ## Build Sequence
 
@@ -128,7 +128,7 @@ Current endpoints:
 - [x] Typed lead + scoring contracts
 - [x] Deterministic scoring engine
 - [ ] Synthetic 48-lead benchmark dataset
-- [ ] Intake + normalization
+- [x] Intake + normalization
 - [ ] Duplicate detection
 - [ ] Enrichment provider abstraction + demo provider
 - [ ] AI provider abstraction + Ollama/demo providers

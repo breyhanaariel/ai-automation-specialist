@@ -1,1 +1,6 @@
-from backend.app.main import app\n
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent / "backend"))
+
+from app.main import app  # noqa: E402,F401

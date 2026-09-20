@@ -4,9 +4,11 @@ from app.config import get_settings
 from app.schemas import (
     HealthResponse,
     LeadScore,
+    LeadSubmission,
     ScoringPreviewRequest,
     ScoringWeights,
 )
+from app.normalization import normalize_lead
 from app.scoring import score_lead
 
 settings = get_settings()
@@ -20,6 +22,11 @@ def health() -> HealthResponse:
         app=settings.app_name,
         environment=settings.environment,
     )
+
+
+@app.post("/api/v1/leads/normalize", response_model=LeadSubmission)
+def normalize_lead_endpoint(lead: LeadSubmission) -> LeadSubmission:
+    return normalize_lead(lead).lead
 
 
 @app.get("/api/v1/scoring/defaults", response_model=ScoringWeights)

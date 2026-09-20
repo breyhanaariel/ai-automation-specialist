@@ -74,3 +74,13 @@ def metrics() -> dict:
 @app.get("/")
 def dashboard_home() -> FileResponse:
     return FileResponse(DASHBOARD / "index.html")
+
+
+@app.post("/api/v1/leads/{lead_id}/review")
+def review_lead(lead_id: str, action: str) -> dict:
+    allowed = {"approve": "ready_for_crm", "edit_and_approve": "ready_for_crm", "nurture": "nurture", "disqualify": "disqualify"}
+    if action not in allowed:
+        raise HTTPException(status_code=422, detail="Unsupported review action")
+    if not store.update_status(lead_id, allowed[action]):
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"lead_id": lead_id, "action": action, "status": allowed[action], "outbound_sent": False}

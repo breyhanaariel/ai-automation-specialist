@@ -55,6 +55,17 @@ class Store:
             cols=[x.name if hasattr(x,"name") else x[0] for x in cur.description]
             return [dict(zip(cols,row)) for row in cur.fetchall()]
 
+    def update_status(self,lead_id:str,status:str)->bool:
+        ph="%s" if self.postgres else "?"
+        q=f"UPDATE leads SET status={ph},updated_at={ph} WHERE lead_id={ph}"
+        now=datetime.now(UTC).isoformat(); conn=self._pg() if self.postgres else self._sqlite()
+        with conn as c:
+            cur=c.cursor(); cur.execute(q,(status,now,lead_id)); changed=cur.rowcount>0
+            if changed:
+                aq=f"INSERT INTO audit_events(lead_id,event,detail,created_at) VALUES({','.join([ph]*4)})"
+                cur.execute(aq,(lead_id,"human_review_decided",status,now))
+            return changed
+
     def metrics(self)->dict[str,int]:
         conn=self._pg() if self.postgres else self._sqlite()
         with conn as c:

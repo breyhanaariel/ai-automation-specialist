@@ -18,7 +18,7 @@ from app.persistence import Store
 from app.workflow import process_lead
 
 settings = get_settings()
-store = Store()
+store = Store(settings.database_url)
 app = FastAPI(title=settings.app_name, version="1.0.0")\nDASHBOARD = Path(__file__).resolve().parents[2] / "dashboard"\nif DASHBOARD.exists():\n    app.mount("/dashboard", StaticFiles(directory=DASHBOARD), name="dashboard")
 
 

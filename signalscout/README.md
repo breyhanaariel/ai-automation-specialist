@@ -2,7 +2,7 @@
 
 **Intelligent Lead Qualification & CRM Automation**
 
-Status: **Project 02 — Intake + normalization in progress**
+Status: **Project 02 — Application coding complete; deployment verification remains**
 
 SignalScout is a portfolio-grade B2B lead qualification and CRM automation system. It is designed to intake leads from website forms, CSV/manual imports, and APIs; validate and enrich them; calculate an explainable 0-100 lead score; apply deterministic business-rule overrides; synchronize approved leads to a CRM adapter; draft personalized outreach; and require human approval before any outbound message.
 
@@ -127,21 +127,21 @@ Current endpoints:
 - [x] Backend/CI foundation
 - [x] Typed lead + scoring contracts
 - [x] Deterministic scoring engine
-- [ ] Synthetic 48-lead benchmark dataset
+- [x] Synthetic 48-lead benchmark dataset
 - [x] Intake + normalization
-- [ ] Duplicate detection
-- [ ] Enrichment provider abstraction + demo provider
-- [ ] AI provider abstraction + Ollama/demo providers
-- [ ] Business-rule routing overrides
-- [ ] Persistence + audit + idempotency
-- [ ] CRM adapter + demo CRM
-- [ ] Outreach drafting
-- [ ] Human-review dashboard
+- [x] Duplicate detection
+- [x] Enrichment provider abstraction + demo provider
+- [x] AI provider abstraction + Ollama/demo providers
+- [x] Business-rule routing overrides
+- [x] Persistence + audit + idempotency
+- [x] CRM adapter + demo CRM
+- [x] Outreach drafting
+- [x] Human-review dashboard
 - [ ] Editable scoring-rule UI/API
-- [ ] n8n orchestration
-- [ ] Evaluation harness
-- [ ] Reliability + observability
-- [ ] Neon deployment persistence
+- [x] n8n orchestration
+- [x] Evaluation harness
+- [x] Reliability + observability
+- [x] Neon project + production schema
 - [ ] Vercel deployment
 - [ ] Final case study + demo assets
 

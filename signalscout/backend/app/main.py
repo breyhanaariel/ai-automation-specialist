@@ -15,8 +15,7 @@ from app.schemas import (
 from app.normalization import normalize_lead
 from app.scoring import score_lead
 from app.persistence import Store
-from app.workflow import process_lead
-
+from app.workflow import process_lead\nfrom app.crm import DemoCRM\n
 settings = get_settings()
 store = Store(settings.database_url)
 app = FastAPI(title=settings.app_name, version="1.0.0")\nDASHBOARD = Path(__file__).resolve().parents[2] / "dashboard"\nif DASHBOARD.exists():\n    app.mount("/dashboard", StaticFiles(directory=DASHBOARD), name="dashboard")
@@ -83,4 +82,6 @@ def review_lead(lead_id: str, action: str) -> dict:
         raise HTTPException(status_code=422, detail="Unsupported review action")
     if not store.update_status(lead_id, allowed[action]):
         raise HTTPException(status_code=404, detail="Lead not found")
-    return {"lead_id": lead_id, "action": action, "status": allowed[action], "outbound_sent": False}
+    crm = DemoCRM().sync(lead_id) if allowed[action] == "ready_for_crm" else None
+    return {"lead_id": lead_id, "action": action, "status": allowed[action],
+            "crm": crm.__dict__ if crm else None, "outbound_sent": False}

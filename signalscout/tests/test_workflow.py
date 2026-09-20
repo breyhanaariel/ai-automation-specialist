@@ -30,6 +30,6 @@ def test_duplicate_routes_to_duplicate_review(tmp_path: Path) -> None:
 
 def test_spam_is_disqualified(tmp_path: Path) -> None:
     store = Store(str(tmp_path / "db.sqlite"))
-    result = process_lead(lead("spam", email="spam@noise.test", company="Noise", inquiry="crypto giveaway"), store)
+    result = process_lead(lead("spam", email="spam@noise-example.com", company="Noise", inquiry="crypto giveaway"), store)
     assert result["routing"]["route"] == "disqualify"
     assert result["outbound_sent"] is False

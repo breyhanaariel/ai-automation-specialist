@@ -53,7 +53,7 @@ class Store:
         with conn as c:
             cur=c.cursor(); cur.execute("SELECT lead_id,email,company,status,payload,created_at,updated_at FROM leads ORDER BY updated_at DESC")
             cols=[x.name if hasattr(x,"name") else x[0] for x in cur.description]
-            return [dict(zip(cols,row)) for row in cur.fetchall()]
+            return [dict(zip(cols,row,strict=True)) for row in cur.fetchall()]
 
     def update_status(self,lead_id:str,status:str)->bool:
         ph="%s" if self.postgres else "?"

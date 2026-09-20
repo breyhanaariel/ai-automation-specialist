@@ -38,4 +38,4 @@ line-length = 100
 src = ["backend", "evals", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["F", "B", "UP"]

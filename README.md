@@ -8,6 +8,8 @@ This portfolio is built as both a hiring portfolio and a hands-on engineering pr
 
 ## Portfolio
 
+🌐 **[View Portfolio Microsite](https://breyhanaariel.github.io/ai-automation-specialist/)**
+
 The portfolio website lives in [`site/`](./site/) and follows the same visual and repository architecture as my other professional portfolios while using a lavender/periwinkle technical identity specific to AI automation.
 
 ### Flagship Systems

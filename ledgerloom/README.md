@@ -2,7 +2,7 @@
 
 **AI Document Processing & Approval System**
 
-Status: **Project 03 — Planned**
+Status: **Project 03 — Interactive application implemented; production deployment pending**
 
 LedgerLoom will demonstrate production-style document intelligence: ingestion, extraction, schema validation, record matching, anomaly detection, approval rules, human review, and auditability.
 
@@ -19,4 +19,4 @@ LedgerLoom will demonstrate production-style document intelligence: ingestion, e
 - retries, fallbacks, and audit trails
 - benchmark datasets and measurable accuracy
 
-Development begins after SignalScout.
+The interactive portfolio application is implemented. Production deployment and live URL verification remain.

@@ -1,0 +1,43 @@
+name: Project Apps CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "ledgerloom/**"
+      - "orbitops/**"
+      - ".github/workflows/project-apps-ci.yml"
+  pull_request:
+    paths:
+      - "ledgerloom/**"
+      - "orbitops/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [ledgerloom, orbitops]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -r ${{ matrix.project }}/requirements.txt httpx
+      - name: Smoke test
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          python - <<'PY'
+          import importlib.util, os
+          from pathlib import Path
+          from fastapi.testclient import TestClient
+          root=Path(os.environ["PROJECT"])
+          spec=importlib.util.spec_from_file_location("portfolio_app", root/"app.py")
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          c=TestClient(mod.app)
+          assert c.get("/health").status_code == 200
+          assert c.get("/").status_code == 200
+          PY

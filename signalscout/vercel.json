@@ -1,15 +1,19 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "functions": {
+    "app.py": {
+      "maxDuration": 60,
+      "includeFiles": ["dashboard/**"]
     }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "app.py"
-    }
-  ]
+  },
+  "env": {
+    "ENVIRONMENT": "public-demo",
+    "AI_PROVIDER": "demo",
+    "AI_MODEL": "deterministic-demo-v1",
+    "ENRICHMENT_PROVIDER": "demo",
+    "CRM_PROVIDER": "demo",
+    "DATABASE_URL": "sqlite:////tmp/signalscout.db"
+  },
+  "rewrites": [{"source": "/(.*)", "destination": "/app.py"}]
 }

@@ -6,6 +6,8 @@ I design AI-powered systems that turn repetitive business processes into reliabl
 
 This portfolio is built as both a hiring portfolio and a hands-on engineering program. Each flagship project is designed to be functional, deployable with a free-first architecture, measurable, and documented for technical interviews.
 
+![AI Automation Specialist Portfolio Cover](./site/assets/portfolio-cover.svg)
+
 ---
 
 ## 💌 Hire Me

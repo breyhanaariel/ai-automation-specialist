@@ -1,0 +1,16 @@
+{
+  "title": "AI Automation Specialist",
+  "accent": "#8B7CC8",
+  "summary": "Developer expanding into AI automation and workflow engineering, focusing on API-driven processes, structured data, human review and reliable system design.",
+  "skills": "Python · REST APIs · Webhooks · FastAPI · n8n · Structured outputs · Schema validation · Workflow design (selected topics under study)",
+  "experience": [
+    "Developed and troubleshot web functionality and supported technical quality assurance.",
+    "Applied debugging and implementation practices transferable to automation engineering."
+  ],
+  "projects": [
+    {
+      "name": "RelayDesk — AI Support Automation (In Development)",
+      "details": "Designing support triage, structured responses, confidence-based routing, human review, validation and escalation architecture."
+    }
+  ]
+}
